@@ -60,73 +60,33 @@ jobs:
           build\bin\x32\Release\ocgcore.dll
           build\bin\x64\Release\ocgcore.dll
 
-    - name: GitHub Release
-      if: github.event_name == 'push'
-      uses: salix5/action-automatic-releases@node20
-      with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "latest"
-        prerelease: true
-        title: "Development Build"
-        files: |
-          build/bin/x64/Release/ocgcore.dll
-
-  build-linux:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Install Dependencies
+    - name: Delete old tag
       run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-multilib g++-multilib
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        git fetch --tags
+        git tag -d ocgcore || true
+        git push origin :refs/tags/ocgcore || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Download lua
-      id: lua
-      uses: mercury233/action-cache-download-file@v1.0.0
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        url: https://www.lua.org/ftp/lua-5.4.8.tar.gz
-
-    - name: Lua
-      run: |
-        tar -xzf ${{ steps.lua.outputs.filepath }}
-        mv lua-5.4.8 lua
-
-    - name: Download premake
-      id: premake
-      uses: mercury233/action-cache-download-file@v1.0.0
+        tag_name: ocgcore
+        release_name: Release ocgcore
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        url: https://github.com/premake/premake-core/releases/download/v5.0.0-beta7/premake-5.0.0-beta7-linux.tar.gz
-
-    - name: Premake
-      run: |
-        mkdir premake-5
-        tar -C premake-5 -xzf ${{ steps.premake.outputs.filepath }}
-        cp premake/lua.lua lua/premake5.lua
-        cp premake/dll.lua dll.lua
-        chmod +x premake-5/premake5
-        ./premake-5/premake5 gmake --file=dll.lua
-
-    - name: Build x32
-      run: |
-        cd build
-        make -j 4 config=release_x32
-        cd ..
-
-    - name: Build x64
-      run: |
-        cd build
-        make -j 4 config=release_x64
-        cd ..
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: ocgcore-linux
-        path: |
-          build/bin/x32/Release/libocgcore.so
-          build/bin/x64/Release/libocgcore.so
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/bin/x64/Release/ocgcore.dll
+        asset_name: ocgcore.dll
+        asset_content_type: application/octet-stream
